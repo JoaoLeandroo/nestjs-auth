@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { SignInDtro, SignUpDto } from './dtos/auth';
 import { PrismaService } from 'src/prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -17,7 +18,15 @@ export class AuthService {
       throw new UnauthorizedException();
     }
 
-    const user = await this.prismaService.user.create({ data });
+    const hashPassword = await bcrypt.hash(data.password, 10);
+
+    const user = await this.prismaService.user.create({
+      data: {
+        ...data,
+        password: hashPassword,
+      },
+    });
+
     return {
       id: user.id,
       name: user.name,
@@ -33,13 +42,18 @@ export class AuthService {
     });
 
     if (!userAlreadyExist) {
-      return { message: 'Email não cadastrado.' };
+      throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (userAlreadyExist.password != data.password) {
-      return { message: 'Senha incorreta.' };
+    const passwordMatch = await bcrypt.compare(
+      data.password,
+      userAlreadyExist.password,
+    );
+
+    if (!passwordMatch) {
+      throw new UnauthorizedException('Invalid credentials.');
     }
 
-    return { message: 'Usuario logado com sucesso!' };
+    return { message: 'User logged in!' };
   }
 }
